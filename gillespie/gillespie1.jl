@@ -1,4 +1,5 @@
 #= Implementation of the Gillespie algorithm for agent-based model, using community-wise carrying capacity K and competition matrix B =#
+#= Pruturbatoin mode: single pulse, constant=#
 #/ Start module
 module Gillespie1
 
@@ -10,23 +11,10 @@ using Dates
 using DataFrames
 using ProgressBars
 using LinearAlgebra
-# using SQLite: DB, Stmt, bind!, load!
-# using SQLite.DBInterface: execute
 #/ Local packages
 using MicrobePlasmidABM
 
 ### FUNCTIONS
-"
-		run(...)
-
-Main function that runs the Gillespie algorithm for the agent-based microbe-plasmid model
-
-Note: to enable/disable .squlite output, unmute/mute the lines L83-97, L100, L144-145, L148-150, and L165-167.    
-
-@TODO: Give the database where to write the data as an argument
-@TODO: Clean up inefficiencies if needed
-@TODO: Check that all variables are used
-"
 function run(
     params::PType;
     filename::String,
@@ -64,14 +52,6 @@ function run(
         [sum(rates .* states.abundances) for rates in rates.competition_rates] .*
             states.abundances
     )
-    
-    # old Rinfection: consider the abundances of all subpouplations in per capita rate
-    # Rinfection = sum(
-    #     [sum(rates .* states.abundances) for rates in rates.infection_rates] .*
-    #         states.abundances
-    # )
-
-    # new Rinfection: consider the abundances of only the recipient subpopulations in percapita rate
     Rinfection = sum(rates.infection_rates .* states.abundances)    
 
 
@@ -79,17 +59,6 @@ function run(
     #@info rates.competition_rates, states.abundances, Rcompetition
     Rtotal = Rgrowth + Rdeath + Rcompetition + Rsegregation + Rinfection
     
-    #/ Allocate for saving (optional, for checking & quick plot)
-    #@TODO Omit this when only writing to the database
-    # rate_array = []
-     state_array = []
-     time_array = []
-    # Rtotal_array = []
-    # deltat_array = []
-    # push!(rate_array, [Rgrowth, Rdeath, Rcompetition, Rsegregation, Rinfection])
-     push!(state_array, copy(states.abundances))
-     push!(time_array, t)
-
     #/ Define function array
     events = [
         do_growth!,
@@ -122,28 +91,14 @@ function run(
     #/ Initialize database (don't print the returned variable)
     @info "Initializing database"
     MicrobePlasmidABM.DataHandler.initialize_database(output_folder, job_key);
-    # db = MicrobePlasmidABM.DataHandler.initialize_database(output_folder, job_key);
-    
+	
     #/ Execute Gillespie algorithm until time t_final
     @info "Begin simulation loop"
 
     while t < params.t_final
         #/ Determine time step from exponential distribution
-        # Δt = -1*log(rand()) / Rtotal # approach of Han; note that no rng is used as argument while sampling in the ABM (slower, and with strain equilibiurm densities that could exceed K_i...)
         Δt = randexp(rng) / Rtotal # approach of Armun (note: randexp() only allows rate = 1 for the exponential distribution)
-        # Δt = -log(rand(rng)) / Rtotal # intermediate approach between Han's & Armun's (using the equation as Han used and the rng as Armun used) (results & speed similar to the approach of Armun)    
-        # Δt = exp(-1/Rtotal) / Rtotal # approach of DeLong & Gibert 2016 (problemsome, as it does not draw a random number...) 
-        
-        # Δt = rand(rng, Exponential(1/ 0.1), 1) / Rtotal # generate a random number from an exponential distribution of rate (i.e. 1/mean) = 0.1; using Distribution (faster for Option 1, but not suggested by David)
-        # or
-        # rate = 5 * sum(states.abundances) # generate a random number from an exponential distribution of rate = 1/(number of events * N); using Distribution (after Hall et al. 2017; too slow)
-        # Δt = rand(rng, Exponential(1/rate), 1)
-        # or 
-        # Δt = rand(rng, Exponential(1/Rtotal), 1) # generate a random number from an exponential distribution of rate = Rtotal (i.e. mean = 1/Rtotal) (results & speed similar to the approach of Armun) 
-        # Δt = Δt[1]
-
-        # @info Δt 
-
+     
         #/ Sample state change using StatsBase
         #~ Sample a specific event weighted by their rate proportion
         _event_idx = sample(rng,
@@ -186,14 +141,6 @@ function run(
 
         #/ Store desired data
         if t > twrite
-            
-            # @info "writing..." states.abundances
-            #@TODO Omit this when only writing to the database
-            # push!(rate_array, copy([Rgrowth, Rdeath, Rcompetition, Rsegregation, Rinfection]))
-             push!(state_array, copy(states.abundances))
-             push!(time_array, copy(t))
-            # push!(deltat_array, copy(Δt))
-            # push!(Rtotal_array, copy(Rtotal))
 
             # Store data into dataframe
             MicrobePlasmidABM.DataHandler.write_current_state(t, states, state_df)
@@ -224,12 +171,6 @@ function run(
         seed, filename, start_time, end_time, elapsed_seconds, output_folder, job_key, JOB_ID
     )
 
-    #/ Return raw data for plotting/testing
-    #@TODO Omit this when only writing to the database
-     return n_events, time_array, state_array, elapsed_seconds
-    # return rate_array, n_events, state_array, time_array, elapsed_seconds
-    # return time_array, Rtotal_array, deltat_array 
-
 end
 
 
@@ -257,12 +198,11 @@ function update_rates!(
 
     #/ Loop over all the affected subpopulations and update the rates accordingly
     #!Note: most elementary reactions result in the change of a single subpopulation,
-    #       but some, like infection, give rise to changes in multiple subpopulations.
+    #       but infection gives rise to changes in multiple subpopulations.
     #       This is the reason for the loop.
     for k in affected_subpopulations
         #/ Update background rates
         Rgrowth = Rgrowth + Δabundance[k] * rates.growth_rates[k]
-        # Rdeath = Rdeath + Δabundance[k] * rates.death_rates[k] # note: this might have missed the change of total death rate with time with other (unaffected) subpouplation
         Rdeath = sum(rates.death_rates .* states.abundances)  + Δabundance[k] * rates.death_rates[k]
         Rsegregation = Rsegregation + Δabundance[k] * rates.segregation_rates[k]
         
@@ -274,26 +214,8 @@ function update_rates!(
         ΔRcompetition += sum(states.abundances .* rates.competition_rates[k])
         Rcompetition = Rcompetition + Δabundance[k] * ΔRcompetition
 
-        #~ Infection (for the old infection equation, consindering all subpopulations in per-capita rate)
-        # ΔRinfection = sum(
-        #     [new_abundances[j] .* rates.infection_rates[j][k] for j in 1:states.N]
-        # )
-        # ΔRinfection += sum(states.abundances .* rates.infection_rates[k])
-        # Rinfection = Rinfection + Δabundance[k] * ΔRinfection
-
-        #~ Infection (for the new infection equation, considering recipient subpouplations in per-capita rate)
-        # Attempt 1 (no update of rates.infection_rates. Not sure if this is correct; besides, we need rates.infection_rate to be updated for to sample the donor in infection event...)
-        # ΔRinfection = 0.0 
-        # for (i, (donor)) in enumerate(states.donors)
-        #     if k in states.recipients[i] # change in donor's recipient's abundance (k as the focal subpopulation's recipient in the infection equation) 
-        #         ΔRinfection += params.infection_rate[states.subpopulations[donor]] * Δabundance[k] * new_abundances[donor]
-        #     elseif k == donor # change in donor's abundance (k as the focal subpopulation in the infeciton equation)
-        #         ΔRinfection += rates.infection_rates[donor] * Δabundance[k]
-        #     end      
-        # end
-        # Rinfection = Rinfection + ΔRinfection
-
-        # Attempt 2 (update per-capita infection rates of affected subpopulations, then recalculate the total infection rate; much faster & with the same results compared to Attempt 3)
+        #~ Infection (considering recipient subpouplations in per-capita rate)
+        # (update per-capita infection rates of affected subpopulations, then recalculate the total infection rate; much faster & with the same results compared to Attempt 3)
         for (i, (donor)) in enumerate(states.donors)
             if k in states.recipients[i] # change in donor's recipient's abundance (k as the focal subpopulation's recipient in the infection equation)
                 Δinfection_rate = params.infection_rate[states.subpopulations[donor]] * Δabundance[k]
@@ -303,10 +225,7 @@ function update_rates!(
 
         
 	  end
-      
-      # Attempt 3 (recalculate per-capita infection rates of all subpopulations, then recalculate total infection rate; time consuming...)
-      # rates.infection_rates = MicrobePlasmidABM.System.update_infection_rate(states, params, new_abundances)
-      
+
       Rinfection = sum(rates.infection_rates .* new_abundances) # this line is used for both Attempt 2 & 3
 
     #/ Update the abundance
@@ -317,46 +236,31 @@ end
 
 "Growth event function"
 function do_growth!(rng, states, rates, new_abundances)       
-	  #/ Sample subpopulation k to increase
+    #/ Sample subpopulation k to increase
     k = sample(rng, 1:states.N, Weights(rates.growth_rates .* states.abundances))
     new_abundances[k] = new_abundances[k] + 1 # round(Int, growth_rates[k]*abundances[k])
-    #/ Growth does not induce death, so no need to check if subpopulation needs to be removed
-    #/ Just return affected subpopulations
     return [k]
 end
 
 "Death event function"
 function do_death!(rng, states, rates, new_abundances)
-	  #/ Sample population to decrease
+    #/ Sample population to decrease
     k = sample(rng, 1:states.N, Weights(rates.death_rates .* states.abundances))
     new_abundances[k] = max(0, new_abundances[k] - 1) # round(Int, death_rates[k]*abundances[k])
-    #/ Death might induce extinction, in which case we want to remove the subpopulation
-    #  from all the associated arrays. So, do that here.
-    #!Note: Make sure that all arrays are swapped when swapping, such that indices
-    #       *always* correspond to the correct subpopulation.
     return [k]
 end
 
-"Competition event function
-@TODO Double check if this is correctly implemented
-"
+"Competition event function"
 function do_competition!(rng, states, rates, new_abundances)
-	#/ Sample the subpopulation that will suffer from competition 
-    #@TODO: Make another variable that holds the density dependent competition rates?
+    #/ Sample the subpopulation that will suffer from competition 
     _Rcompetition = [sum(states.abundances .* rates.competition_rates[i]) for i in 1:states.N] # get the latest per capita competition rate for each subpoupation in the system
     k = sample(rng, 1:states.N, Weights(_Rcompetition .* states.abundances))
     #/ Update abundances
     new_abundances[k] = max(0, new_abundances[k] - 1)
-    #/ Competition might induce extinction, in which case we want to remove the subpopulation
-    #  from all the associated arrays. So, do that here.
-    #!Note: Make sure that all arrays are swapped when swapping, such that indices
-    #       *always* correspond to the correct subpopulation.
     return [k]
 end
 
-"Segregation event
-@TODO: Include the possibilty of losing a subset of plasmids
-"
+"Segregation event"
 function do_segregation!(rng, states, rates, new_abundances)
     #/ Sample parent strain that will lose all plasmids
     parent = sample(rng, 1:states.N, Weights(rates.segregation_rates .* states.abundances))
@@ -402,7 +306,6 @@ end
 "Infection event"
 function sampled_donor(rng, states, rates) # function that will return a sampled donor (index in the donor list) and its recipients (recipients' subpopulation id)
     while true
-        #donor_index = sample(rng, 1:length(states.donors), Weights(states.abundances[states.donors] .* sum.(rates.infection_rates[states.donors]))) # get donors indice in the donors; for the old infection equation
         donor_index = sample(rng, 1:length(states.donors), Weights(rates.infection_rates[states.donors] .* states.abundances[states.donors])) # get donors indice in the donors; for the new infection equation
         its_recipients = states.recipients[donor_index] #/ this return the element(s) (i.e. the recipients' subpopulation id)
         if any(x -> x > 0, states.abundances[its_recipients]) #/ if any of the sampled donor's recipients has abundance > 0; if no, resample the donor
@@ -430,20 +333,11 @@ function do_infection!(rng, states, rates, new_abundances, propensities, params,
         #~ Sample transconjugant based on the propensity tensor
         #!Note: We need to get the subpopulation index in propensity tensor,
         #       as the propensity tensor is nm * nm * nm where n = number of all possilbe plasmid profiles and m = number of all possible bacterial strains
-        #i = states.profile_indices[donor]
-        #j = states.profile_indices[recipient]
         i = states.donors_indices_Γ[donor_id]
         j = states.recipients_indices_Γ[donor_id][recipient_id]
         _transconjugant = sample(rng, 1:params.n_bstrains * length(states.all_profiles), Weights(propensities[:, i, j])) # transconjugant's subpouplation indice in Γ    
-        #_plasmid_profile = (_transconjugant % length(states.all_profiles) == 0) ? 
-        #     states.all_profiles[end] :
-        #     states.all_profiles[_transconjugant % length(states.all_profiles)]
         _strain = states.rep_strains[_transconjugant]
         _plasmid_profile = states.rep_profiles[_transconjugant]
-        # transconjugant = findfirst(
-        #     states.subpopulations .== states.subpopulations[recipient] .&&
-        #         states.plasmid_profiles .== [_plasmid_profile]
-        # )
 
         transconjugant = findfirst(xy -> first(xy) == _strain && last(xy) == _plasmid_profile, collect(zip(states.subpopulations, states.plasmid_profiles)))
         # @info transconjugant recipient donor # used to check if idices are reasonable 
@@ -502,53 +396,23 @@ function do_infection!(rng, states, rates, new_abundances, propensities, params,
              end    
             end 
 
-            # for (j, plasmid_profile) in enumerate(states.plasmid_profiles)
-            #     #/ Check if donor can infect recipient
-            #     if any(_plasmid_profile .> plasmid_profile)
-            #         push!(recipients_of_donor, j)
-            #         _recipient_index_Γ = findfirst(xy -> first(xy) == states.subpopulations[j] && last(xy) == states.plasmid_profiles[j], collect(zip(states.rep_strains, states.rep_profiles)))
-            #         push!(_recipient_indices_Γ, _recipient_index_Γ)
-            #     end
-            # end
-
             push!(states.recipients, recipients_of_donor)
             push!(states.recipients_indices_Γ, _recipient_indices_Γ)
 
             #/ Update rate arrays
-            _plasmids = findall(_plasmid_profile .> 0)
+            _plasmids = findall(_plasmid_profile .> 0) # list the plasmids hosted by the new subpopulation
 
-            # Option 1: Not including intra-specific competition 
+            # growth rate: not including intra-specific competition 
             _η = params.growth_rate[_strain_id] * reduce((x, y) -> x * (1.0 - y), params.plasmid_cost[_plasmids], init=1.0)
-
-            # Option 2: Including intra-specific competition; considering K_i 
-            # strain_abundance = sum(states.abundances[states.subpopulations .== _strain_id]) #/ get the focal substrain's strain abundance
-            # _η = params.growth_rate[_strain_id] * (1- strain_abundance / params.carrying_capacity[_strain_id]) * reduce((x, y) -> x * (1.0 - y), params.plasmid_cost[_plasmids], init=1.0) # taking the sequential product of (1-cost) from each plasmid
-
-            # Option 3: Including intra-specific competition; considering K = sum of K_i 
-            # K = sum(params.carrying_capacity) #/ get community carrying capacity
-            # N = sum(states.abundances) #/ get the community abundance
-            # _η = params.growth_rate[_strain_id] * (1- N / K) * reduce((x, y) -> x * (1.0 - y), params.plasmid_cost[_plasmids], init=1.0) # taking the sequential product of (1-cost) from each plasmid
-        
             push!(rates.growth_rates, _η)
         
-        
+            # death rate and segregation rate
             _μ = params.death_rate[_strain_id] * (1 + pulse_nd_single(time, params.perturbation_impact[s_train_id], 48) * (1 - maximum(params.plasmid_resistance[_plasmids])))
             push!(rates.death_rates, _μ)
             _ω = params.segregation_error[_strain_id]
             push!(rates.segregation_rates, _ω * _η)
-
-
-        
-            #/ for the old version of infection equation: extend existing vectors of competition rates and infectoin rates with the old subpopulations as the focal subpopulations
-            # for i in 1:(states.N-1)
-            #     #/ feed in the new subpopulation's competiton impact on old (focal) subpopulations (η * A)
-            #     push!(rates.competition_rates[i], rates.competition_rates[i][recipient])
             
-            #     #/ feed in the infection (encounter) rates between the old (focal; could be donor) and the new (other) subpopulation (ϕ)
-            #     push!(rates.infection_rates[i], rates.infection_rates[i][recipient])
-            # end
-            
-            #/ for the new version of infection equation: extend existing vectors of competition rates with the old subpopulations as the focal subpopulations
+            #/ competition rate: (1) extend existing vectors of competition rates with the old subpopulations as the focal subpopulations
             for i in 1:(states.N-1)
                 #/ feed in the new subpopulation's competiton impact on old (focal) subpopulations (η * A)
                 push!(rates.competition_rates[i], rates.competition_rates[i][recipient])
@@ -559,67 +423,20 @@ function do_infection!(rng, states, rates, new_abundances, propensities, params,
             B = copy(params.A) .+1
             B[diagind(B)] .= 1
         
-            #/ for the old infection equation: create new vectors of competition rates and infectoin rates with the new subpopulation as the focal subpopulation
-            # _competition_rates = Array{Float64, 1}(undef, 0)
-            # _infection_rates = Array{Float64, 1}(undef, 0)
-
-            
-            # for i in 1:(states.N)
-            #     #/ calculate each subpopulation's competiton impact on the new (focal) subpopulation and add the new vector of competition rates (η * A)
-            #     # Option 1.1: consider both intraspecific and interpecific competition rate, and K_i
-            #     # push!(_competition_rates, _η * params.A[_strain_id, states.subpopulations[i]]/ params.carrying_capacity[_strain_id])
-
-            #     # Option 1.2: consider both intraspecific and interpecific competition rate, and community-wise K (e.g. = K_i)
-            #     push!(_competition_rates, _η * B[_strain_id, states.subpopulations[i]]/ K)
-
-            #     # Option 2: Consider only interpecific competition rate and K_i
-            #     # x = (_strain_id == states.subpopulations[i]) ?
-            #     # 0.0 : _η * params.A[_strain_id, states.subpopulations[i]]/ params.carrying_capacity[_strain_id]
-            #     # push!(_competition_rates, x)
-
-            #     # Option 3: Consider only interpecific competition rate and K = sum if K_i       
-            #     # x = (_strain_id == states.subpopulations[i]) ?
-            #     # 0.0 : _η * params.A[_strain_id, states.subpopulations[i]]/ K
-            #     # push!(_competition_rates, x)    
-            
-            #     #/ calculate the infection (encounter) rates between the old (focal; could be donor) subpopulations and the new (other) subpopulation to the vector of infection rates (ϕ)
-            #     if any(states.plasmid_profiles[i] .> _plasmid_profile)
-            #         push!(_infection_rates, params.infection_rate[states.subpopulations[i]])
-            #     else 
-            #         push!(_infection_rates, 0.0)    
-            #     end    
-
-            # end
-            
-            #/ for the new infection equation: create new vectors of competition rates with the new subpopulation as the focal subpopulation
+            #/ competition rate: (2) create new vectors of competition rates and infectoin rates with the new subpopulation as the focal subpopulation
             _competition_rates = Array{Float64, 1}(undef, 0)
             
             for i in 1:(states.N)
-                #/ calculate each subpopulation's competiton impact on the new (focal) subpopulation and add the new vector of competition rates (η * A)
-                # Option 1.1: consider both intraspecific and interpecific competition rate, and K_i
-                # push!(_competition_rates, _η * params.A[_strain_id, states.subpopulations[i]]/ params.carrying_capacity[_strain_id])
-
-                # Option 1.2: consider both intraspecific and interpecific competition rate, and community-wise K (e.g. = K_i)
-                push!(_competition_rates, _η * B[_strain_id, states.subpopulations[i]]/ K)
-
-                # Option 2: Consider only interpecific competition rate and K_i
-                # x = (_strain_id == states.subpopulations[i]) ?
-                # 0.0 : _η * params.A[_strain_id, states.subpopulations[i]]/ params.carrying_capacity[_strain_id]
-                # push!(_competition_rates, x)
-
-                # Option 3: Consider only interpecific competition rate and K = sum if K_i       
-                # x = (_strain_id == states.subpopulations[i]) ?
-                # 0.0 : _η * params.A[_strain_id, states.subpopulations[i]]/ K
-                # push!(_competition_rates, x)     
+                # consider both intraspecific and interpecific competition rate, and community-wise K 
+                push!(_competition_rates, _η * B[_strain_id, states.subpopulations[i]]/ K)     
             end
 
-            #/ for the new infection equation: calculate the per-capita infection rate of the new subpopulation as the focal subpopulation
+            #/ infection equation rate: calculate the per-capita infection rate of the new subpopulation as the focal subpopulation
             _infection_rate = params.infection_rate[_strain_id] * sum(states.abundances[recipients_of_donor])
             
-            #/ add the new vectors of competition rates and infectoin rates to the existing vectors of vectors
+	    #/ add the new vectors of competition rates and infectoin rates to the existing vectors of vectors
             push!(rates.competition_rates, _competition_rates)
-            #push!(rates.infection_rates, _infection_rates) # for the old version of infection equation
-            push!(rates.infection_rates, _infection_rate) # for the new version of infeciton equation
+            push!(rates.infection_rates, _infection_rate) 
         
         end
     end    
