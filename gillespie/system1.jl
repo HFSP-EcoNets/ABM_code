@@ -321,8 +321,7 @@ function get_propensities3(params; power::Float64 = 2.0)
     #/ To compute the propensity tensor P, we need a list of all different strain ID & plasmid
     #  profiles that can exist in the system, even those that are not initially present.
     #!Note: The order of plasmid profiles is determined by Iterators.product.
-    #!Note: Right now we can only define the propensity tensor here, but we would like it
-    #       to be an input parameter to the system instead.
+    #!Note: Usually the tensor has been generated in advance in a json file, and treated as input parameter to the system.
     start_time = now()
     combs = Iterators.product([[0,1] for i in 1:params.n_pstrains]...) #/ create tuple (i.e. immutable collection of elements) of vectors[0,1] repeated by n_pstrains
     all_profiles = collect.(vec([comb for comb in combs])) #/ create all possible plasmid profiles in the system
