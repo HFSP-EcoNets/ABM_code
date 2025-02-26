@@ -12,15 +12,13 @@ include("gillespie/system.jl")
 include("gillespie/gillespie.jl")
 include("gillespie/system1.jl")
 include("gillespie/system2.jl")
-include("gillespie/system3.jl")
 include("gillespie/gillespie1.jl")
 include("gillespie/gillespie2.jl")
-include("gillespie/gillespie3.jl")
+
 #~ Model related modules
 #include("models/models.jl")
 #~ Data I/O related modules
 include("analysis/gatheroutput.jl")
-include("analysis/gatheroutput2.jl")
 #~ JSON file generation modules
 include("parameters/json/json_generator.jl")
 #~ Other modules
