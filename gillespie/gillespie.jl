@@ -1,4 +1,5 @@
 #= Implementation of the Gillespie algorithm for agent-based model, using community-wise carrying capacity K and competition matrix B =#
+#= Pruturbatoin mode: periodic, exponentially decreasing=#
 #/ Start module
 module Gillespie
 
@@ -200,7 +201,7 @@ function update_rates!(
 
     #/ Loop over all the affected subpopulations and update the total rates accordingly
     #!Note: most elementary reactions result in the change of a single subpopulation,
-    #       but infection give rise to changes in multiple subpopulations.
+    #       but infection gives rise to changes in multiple subpopulations.
     #       This is the reason for the loop.
     for k in affected_subpopulations
         #/ Update background rates
