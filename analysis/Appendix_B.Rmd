@@ -1,0 +1,944 @@
+---
+title: "Appendix B: Supplementary results from the agent-based model"
+geometry: margin=2cm # or "left=3cm,right=3cm,top=2cm,bottom=2cm"
+output: 
+  pdf_document:
+  latex_engine: xelatex
+fontsize: 10pt
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+---
+\vspace{-1cm}
+For the experimental design and data analysis, see Materials and Methods and Figure 1b in the main text. The abbreviations of network structure treatment in each experiment is explained in Table 1.
+
+```{r setup, include=FALSE}
+# note: to skip a section of content, select the section and press shift + command + C
+
+# mute the code (not to print them out)
+knitr::opts_chunk$set(echo = FALSE)
+
+# set working directory
+setwd("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R")
+
+# packages & customized functions for data processing
+source("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R/process_util.R") 
+source("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R/figure_themes.R")
+
+# read in the experimental design
+file_path <- "/Users/YingJie/Documents/GitHub/population_dynamics_ABM/hpc/sims/input/3x4_test_IP_ctl_K_LB6-2_traits-fixed.csv"
+design <- read.csv(file_path, header = TRUE)
+
+first_key = min(design$key) # the first key of your experiment
+last_key = max(design$key) # the last key of your experiment
+n_b <- design$n_b[1]
+n_p <- design$n_p[1]
+n_rep = length(unique(design$rep))
+K = 20000 # community carrying capacity
+
+experiment_labels <- c("1" = "FF", "2" = "FM", "3" = "FH", 
+                       "4" = "NF", "5" = "NM", "6" = "NH", 
+                       "7" = "MF", "8" = "MM", "9" = "MH")
+
+# read in the results (pre-processed into .csv files)
+df_LB <- read.csv("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/hpc/sims/output/df_LB_ctl_t20000.csv")
+
+# Create lists of subpopulations of interests
+pp_list1 = c("0 0 0 0", "1 0 0 0", "0 1 0 0", "0 0 1 0", "0 0 0 1") # plasmid-free & monoplasmidic subpopulations
+pp_list2 = c("1 1 0 0", "1 0 1 0", "1 0 0 1", "0 1 1 0", "0 1 0 1", "0 0 1 1") # double-plasmid subpopulations
+pp_list3 = c("0 1 1 1", "1 0 1 1", "1 1 0 1", "1 1 1 0", "1 1 1 1") # three-plasmid & all-plasmid subpopulations
+pp_list_p1 = c("1 0 0 0", "1 1 0 0", "1 0 1 0", "1 0 0 1", "1 1 1 0", "1 1 0 1", "1 0 1 1", "1 1 1 1") # P1-hosting subpopulations
+pp_list_p2 = c("0 1 0 0", "1 1 0 0", "0 1 1 0", "0 1 0 1", "1 1 1 0", "1 1 0 1", "0 1 1 1", "1 1 1 1") # P2-hosting subpopulations
+pp_list_p3 = c("0 0 1 0", "1 0 1 0", "0 1 1 0", "0 0 1 1", "1 1 1 0", "1 0 1 1", "0 1 1 1", "1 1 1 1") # P3-hosting subpopulations
+pp_list_p4 = c("0 0 0 1", "1 0 0 1", "0 1 0 1", "0 0 1 1", "1 1 0 1", "1 0 1 1", "0 1 1 1", "1 1 1 1") # P4-hosting subpopulations
+
+# Create fixed p_profile colors
+profile_colors <- c("0 0 0 0" = "olivedrab3",
+                    "1 0 0 0" = "#97ebdb", "0 1 0 0" = "#00c2c7", "0 0 1 0" = "#0086ad", "0 0 0 1" = "#005582",
+                    "1 1 0 0" = "burlywood", "1 0 1 0" = "#f7c5a1", "1 0 0 1" = "#f2995a", "0 1 1 0" = "#bd580f", "0 1 0 1" = "#833c0b", "0 0 1 1" = "orangered4",
+                    "1 1 1 0" = "#efbbff", "1 1 0 1" = "#a466eb", "1 0 1 1" = "#be29ec", "0 1 1 1" = "#800080",
+                    "1 1 1 1" = "#ff5252")
+
+# Create desired order of p_profiles
+desired_order <- c("0 0 0 0", "1 0 0 0", "0 1 0 0", "0 0 1 0", "0 0 0 1",
+                   "1 1 0 0", "1 0 1 0", "1 0 0 1", "0 1 1 0", "0 1 0 1", "0 0 1 1",
+                   "1 1 1 0", "1 1 0 1", "1 0 1 1", "0 1 1 1", "1 1 1 1")
+
+# Create fixed strain colors
+strain_colors <- c("1" = "#f8766d", "2" = "#00Ba38", "3" = "#619cff")
+
+# Ensure p_profile in df_LB is a factor with the desired order
+df_LB$p_profile <- factor(df_LB$p_profile, levels = desired_order)
+```
+
+## Dynamics of microbe coexistence probability
+
+The dynamics of microbe coexistence probability is calculated as the proportion of replicates with complete(3-population)/partial(2-population) coexistence out of total number of replicates across time. Time was only plotted to t = 10000 where all probabilities had dropped to zero. K at x-axis represents 1000 (hours).
+
+```{r microbe coexistence rate LB, message=FALSE, warning=FALSE, fig.width=8, fig.height=6.67, fig.cap="Figure B1: Dynamics of microbe coexistence of three populations (solid line) and two populations (dashed line) at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+
+# assign experiment colors
+experiment_colors <- c("1" = "pink", "2" = "palevioletred1", "3" = "red4", 
+                       "4" = "lightskyblue", "5" = "royalblue", "6" = "slateblue4", 
+                       "7" = "seagreen1", "8" = "seagreen3", "9" = "seagreen4")
+
+
+# calculate population abundance of each experiment, replicate and t
+pop_abundance_t <- df_LB %>%
+  group_by(experiment, replicate, t, strain) %>%
+  summarize(sum_abundance = sum(abundance)/K) %>%
+  filter(sum_abundance > 0)
+
+# record number of bacterial strain(s) last at each experiment, replicate and t
+coexistence_t <- pop_abundance_t %>%
+  group_by(experiment, replicate,t) %>%
+  summarise(n_strains = n(), .groups = "drop") %>%
+  # create new columns for boolean values (true as 1, false as 0): coexistence_all & coexistence_two
+  mutate(coexistence_all = case_when(n_strains == 3 ~ 1, TRUE ~ 0), coexistence_two = case_when(n_strains >= 2 ~ 1, TRUE ~ 0))
+
+# calculate and plot the probabilities
+coexistence_t %>%
+  # plot to a given scale of interest (e.g. 10000)
+  filter(t <= 10000) %>%
+  # Sum up subpopulation abundance of each strain at each t for each replicate
+  group_by(experiment, t) %>% 
+  summarise(n = n(), prob_coexistence_all=mean(coexistence_all), prob_coexistence_two=mean(coexistence_two),
+    .groups = "drop")%>%
+  ggplot(aes(x = t, color = factor(experiment))) + # (used for colored lines)
+  #ggplot(aes(x = t)) +
+    geom_line(aes(y = prob_coexistence_all, linetype = "3 populations"), size = 0.5) +
+    geom_line(aes(y = prob_coexistence_two, linetype = "2 populations"), size = 0.5) +
+    scale_linetype_manual(values = c("3 populations" = "solid", "2 populations" = "dashed"),
+      labels = c("3 populations" = "3 populations", "2 populations" = "2 populations")) +
+    scale_color_manual(values = experiment_colors) +  # Use experiment_colors for custom colors (used for colored lines)
+    #facet_wrap(~ experiment, scales = 'free_y', labeller = as_labeller((experiment_labels))) +
+    facet_wrap(~ experiment, labeller = as_labeller((experiment_labels))) +
+    labs(x="Time", y = "Probability of coexistence", linetype = "Coexistence type") +
+    scale_x_continuous(breaks = seq(min(df_LB$t), 10000, by =5000),  # Major ticks
+                     #minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),   # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+    paper_figs_theme +
+    #guides(linetype = "none") + # Removes the line legend for experiment
+    guides(color = "none", linetype = "none") +  # Removes the color & line legend for experiment (used for colored lines)
+    theme(strip.text = element_text(size = 14))
+    #theme(strip.text = element_blank()) # Removes facet labels
+
+# pdf size: 6.70 x 4.53 (inches)
+```
+
+\newpage
+## Population dominance at the end of the simulations
+
+```{r end population dominance LB, message=FALSE, warning=FALSE, fig.width=12, fig.height=10, fig.cap="Figure B2: Pouplation dominance at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+experiment_colors <- c("FF" = "pink", "FM" = "palevioletred1", "FH" = "red4", 
+                       "NF" = "lightskyblue", "NM" = "royalblue", "NH" = "slateblue4", 
+                       "MF" = "seagreen1", "MM" = "seagreen3", "MH" = "seagreen4")
+
+# calculate population proportion in each experiment & replicate
+pop_proportion <- df_LB %>%
+  filter(t == max(t)) %>%
+  group_by(experiment, replicate) %>%
+  mutate(total_abundance = sum(abundance)) %>%
+  group_by(experiment, replicate, strain) %>%
+  summarise(
+    proportion = sum(abundance) / first(total_abundance),
+    .groups = 'drop'
+  )
+
+# Create table for plotting replicates in ternary plots
+pop_wide <- pop_proportion %>%
+  complete(experiment, replicate, strain, fill = list(proportion = 0))%>%
+  pivot_wider(names_from = strain, values_from = proportion)%>%
+  mutate(experiment = recode(experiment,
+                             `1` = "FF",
+                             `2` = "FM",
+                             `3` = "FH",
+                             `4` = "NF",
+                             `5` = "NM",
+                             `6` = "NH",
+                             `7` = "MF",
+                             `8` = "MM",
+                             `9` = "MH")) %>% 
+  rename(B1 = `1`, B2 = `2`, B3 = `3`)
+
+pop_wide_FF <- subset(pop_wide, experiment == "FF")
+pop_wide_FM <- subset(pop_wide, experiment == "FM")
+pop_wide_FH <- subset(pop_wide, experiment == "FH")
+
+pop_wide_NF <- subset(pop_wide, experiment == "NF")
+pop_wide_NM <- subset(pop_wide, experiment == "NM")
+pop_wide_NH <- subset(pop_wide, experiment == "NH")
+
+pop_wide_MF <- subset(pop_wide, experiment == "MF")
+pop_wide_MM <- subset(pop_wide, experiment == "MM")
+pop_wide_MH <- subset(pop_wide, experiment == "MH")
+
+## Option 2: plot each replicate from each experiment, separated by I treatments
+# Record original margins
+oPar <- par("mar") # reduce margins and write in them
+
+
+# Set up a 1x3 layout, between-pannel margins and outter margins 
+par(mfrow = c(3, 3),
+    oma = c(0.0, 0.0, 0.0, 0.0),   # Reduce margins around each plot
+    mar = c(0.2, 0.2, 0.2, 0.2))   # Set outer margins (optional)
+
+# Plot 1
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_FF[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[1]))
+text(0.0, 0.35, "FF", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 2
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_FM[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[2]))
+text(0.0, 0.35, "FM", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 3
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_FH[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[3]))
+text(0.0, 0.35, "FH", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 4
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_NF[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[4]))
+text(0.0, 0.35, "NF", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 5
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_NM[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[5]))
+text(0.0, 0.35, "NM", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 6
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_NH[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[6]))
+text(0.0, 0.35, "NH", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 7
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_MF[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[7]))
+text(0.0, 0.35, "MF", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 8
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_MM[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[8]))
+text(0.0, 0.35, "MM", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Plot 9
+TernaryPlot(axis.labels = c(0, "", "", "", "", 1),
+            alab = "B1", blab = "B2", clab = "B3",
+            point = "up",
+            grid.lines = 5,
+            grid.minor.lty = "dotted",
+            axis.cex = 2.0,
+            lab.cex = 2.5,
+            lab.offset = 0.1)
+TernaryPoints(pop_wide_MH[, c("B1", "B2", "B3")],
+              pch = 19,
+              cex = 2.0,
+              col = add_transparency(experiment_colors[9]))
+text(0.0, 0.35, "MH", cex = 2.5, font = 2) # Place the title in the middle of the plot
+
+# Reset layout to default
+par(mfrow = c(1, 1))
+
+# Restore the original margin settings
+par(mar = oPar)
+```
+
+
+
+
+\newpage
+## Plasmid prevalence at the end of the simulations
+```{r end plasmid prevalence LB, message=FALSE, warning=FALSE, fig.cap="Figure B3: Plasmid prevalence at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+
+prev_P1 <- df_LB %>%
+  filter(abundance > 0) %>%
+  # calculate plasmid abundance and prevalence
+  group_by(experiment, t, replicate) %>%
+  summarize(B_abundance = sum(abundance),
+            P_abundance = sum(abundance[p_profile %in% pp_list_p1])) %>%
+  mutate(P_prevalence = (P_abundance/B_abundance)*100)%>%
+  ungroup() %>%
+  # calculate mean plasmid prevalence
+  group_by(experiment, t) %>%
+  summarize(n = n(), mean_prevalence = mean(P_prevalence),
+            se = sd(P_prevalence)/sqrt(n),
+            lower_se = ifelse(mean_prevalence - se<0, 0, mean_prevalence - se), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prevalence + se) %>%
+  mutate(plasmid = "P1")
+
+prev_P2 <- df_LB %>%
+  filter(abundance > 0) %>%
+  # calculate plasmid abundance and prevalence
+  group_by(experiment, t, replicate) %>%
+  summarize(B_abundance = sum(abundance),
+            P_abundance = sum(abundance[p_profile %in% pp_list_p2])) %>%
+  mutate(P_prevalence = (P_abundance/B_abundance)*100)%>%
+  ungroup() %>%
+  # calculate mean plasmid prevalence
+  group_by(experiment, t) %>%
+  summarize(n = n(), mean_prevalence = mean(P_prevalence),
+            se = sd(P_prevalence)/sqrt(n),
+            lower_se = ifelse(mean_prevalence - se<0, 0, mean_prevalence - se), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prevalence + se) %>%
+  mutate(plasmid = "P2")
+  
+prev_P3 <- df_LB %>%
+  filter(abundance > 0) %>%
+  # calculate plasmid abundance and prevalence
+  group_by(experiment, t, replicate) %>%
+  summarize(B_abundance = sum(abundance),
+            P_abundance = sum(abundance[p_profile %in% pp_list_p3])) %>%
+  mutate(P_prevalence = (P_abundance/B_abundance)*100)%>%
+  ungroup() %>%
+  # calculate mean plasmid prevalence
+  group_by(experiment, t) %>%
+  summarize(n = n(), mean_prevalence = mean(P_prevalence),
+            se = sd(P_prevalence)/sqrt(n),
+            lower_se = ifelse(mean_prevalence - se<0, 0, mean_prevalence - se), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prevalence + se) %>%
+  mutate(plasmid = "P3")
+
+prev_P4 <- df_LB %>%
+  filter(abundance > 0) %>%
+  # calculate plasmid abundance and prevalence
+  group_by(experiment, t, replicate) %>%
+  summarize(B_abundance = sum(abundance),
+            P_abundance = sum(abundance[p_profile %in% pp_list_p4])) %>%
+  mutate(P_prevalence = (P_abundance/B_abundance)*100)%>%
+  ungroup() %>%
+  # calculate mean plasmid prevalence
+  group_by(experiment, t) %>%
+  summarize(n = n(), mean_prevalence = mean(P_prevalence),
+            se = sd(P_prevalence)/sqrt(n),
+            lower_se = ifelse(mean_prevalence - se<0, 0, mean_prevalence - se), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prevalence + se) %>%
+  mutate(plasmid = "P4")
+
+
+prevalence = rbind(prev_P1, prev_P2, prev_P3, prev_P4)
+
+# Plot the plasmid prevalence
+plot_plasmid_prev <- prevalence %>%
+  #filter(mean_prevalence > 0) %>%
+  filter(t == max(t)) %>%
+  ggplot(aes(x = plasmid, y = mean_prevalence, fill = plasmid)) +
+  geom_bar(stat="identity") +
+  #facet_wrap(~ experiment, labeller = as_labeller((experiment_labels))) +
+  facet_wrap(~ experiment, labeller = as_labeller(experiment_labels), scales = "free_x") +
+  scale_fill_manual(values = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a")) +
+  geom_errorbar(aes(ymin=lower_se, ymax=upper_se), width=.2, position=position_dodge(.9)) +
+  labs(x = NULL, y = "Prevalence", fill = "Plasmid") +
+  paper_figs_theme +
+  theme(strip.text = element_text(size = 14))
+        #strip.text = element_blank(), # Removes facet labels
+        #strip.background = element_blank()) # Removes background if there was any)
+
+plot_plasmid_prev
+# pdf size: 6.70 x 4.53 (inches)
+```
+
+
+
+
+\newpage
+## Population composition at the end of the simulations
+
+```{r end population composition LB, message=FALSE, warning=FALSE, fig.cap="Figure B4: Population composition at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+
+profiles <- unique(df_LB$p_profile)
+
+sbp_proportion = data.frame(experiment=numeric(0), 
+                            strain = numeric(0), 
+                            replicate = numeric(0),
+                            B_abundance = numeric(0),
+                            subp_abundance = numeric(0),
+                            p_profile = character(0), 
+                            proportion = numeric(0))
+
+for (i in 1:length(profiles)) {
+  table <- df_LB %>%
+    filter(t == max(t)) %>%
+    # calculate subpopulation proportion 
+    group_by(experiment, strain, replicate) %>%
+    summarize(B_abundance = sum(abundance), subp_abundance = sum(abundance[p_profile == profiles[i]])) %>%
+    mutate(p_profile = profiles[i], proportion = subp_abundance/B_abundance)
+  # combind the data frame
+  sbp_proportion = rbind(sbp_proportion, table) 
+}
+
+
+
+plot_mean_sbp_prop <- sbp_proportion %>%
+  # remove rows where proportion = NaN (due to strain extinction)
+  filter(B_abundance > 0) %>%
+  # calculate mean subpopulation proportion
+  group_by(experiment, strain, p_profile) %>%
+  summarize(n = n(), mean_proportion = mean(proportion),
+            se = sd(proportion)/sqrt(n),
+            lower_se = ifelse(mean_proportion - se<0, 0, mean_proportion - se), # set the lower boundary (0) for the SE bar
+            upper_se = mean_proportion + se) %>%
+  mutate(strain = factor(strain, levels = c("1", "2", "3"), labels = c("B1", "B2", "B3"))) %>%
+  ggplot(aes(x = strain, y = mean_proportion)) +
+  geom_bar(stat = 'identity', aes(fill = p_profile)) +
+  #geom_errorbar(aes(x = strain, ymax = upper_se, ymin = lower_se), width = 0.1) +
+  facet_wrap(~ experiment, labeller = as_labeller(experiment_labels)) +
+  #facet_wrap(~ experiment, labeller = as_labeller(experiment_labels), scales = "free_x") +
+  scale_fill_manual(values = profile_colors, drop = TRUE) +
+  labs(x = NULL, y = "Proportion", fill = "Profile") +
+  paper_figs_theme +
+  theme(strip.text = element_text(size = 14))
+  #theme(strip.text = element_blank(), # Removes facet labels
+  #      strip.background = element_blank()) # Removes background if there was any
+
+plot_mean_sbp_prop
+
+# pdf size: 6.70 x 4.53 (inches)
+```
+
+
+
+
+\newpage
+## Dynamics of population abundance
+
+The dynamics of population abundance was visualized by plotting the mean ± 1 standard error of the abundance of each population across replicates at each time point. Note that the number of replicates of a population at a given time point may vary across time, for it depends on how many replicates still have that population at that time point. Time was only plotted to t = 10000 where equilibrium of population abundance had been reached. Note that the K at x-axis represents 1000 (hours).
+
+```{r dyn population abundance LB, message=FALSE, warning=FALSE, fig.cap="Figure B5: Dynamics of pouplation abundance at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+
+df_LB %>% 
+  filter(abundance > 0) %>% 
+  # plot to a given scale of interest (e.g. 10000)
+  filter(t <= 10000) %>%
+  # Sum up subpopulation abundance of each strain at each t for each replicate
+  group_by(experiment, t, strain, replicate) %>% 
+  summarise(sum_abund=sum(abundance)/K) %>%
+  ungroup() %>%
+  # Rename strains
+  # mutate(strain = recode(strain, "1" = "B1", "2" = "B2", "3" = "B3")) %>%
+  # Now average across replicates
+  group_by(experiment, t, strain) %>%
+  summarise(n = n(), mean_abund=mean(sum_abund), 
+            sd_abund=sd(sum_abund),
+            se_abund=sd(sum_abund)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ggplot(aes(x = t, y = mean_abund, color = factor(strain))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+    facet_wrap(~ experiment, scales = 'free_y', labeller = as_labeller((experiment_labels))) +
+    labs(x="Time", y = "Abundance/K", color = "Host") +
+    scale_color_manual(values = strain_colors, labels = c("B1", "B2", "B3")) +
+    scale_x_continuous(breaks = seq(min(df_LB$t), 10000, by = 5000),  # Major ticks
+                     #minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+    paper_figs_theme +
+    theme(strip.text = element_text(size = 14))
+```
+
+
+\newpage
+## Dynamics of plasmid prevalence 
+The dynamics of plasmid prevalence was visualized by plotting the mean ± 1 standard error of the prevalence of plasmid across all replicates at each time point. Time was only plotted to t = 10000 where equilibrium of plasmid prevalence had been reached. Note that the K at x-axis represents 1000 (hours).
+
+
+```{r dyn plasmid prevalence LB, message=FALSE, warning=FALSE, fig.cap="Figure B6: Dynamics of plasmid prevalence at at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+prevalence %>%
+  filter(mean_prevalence > 0) %>%
+  # plot to a given scale of interest (e.g. 10000)
+  filter(t <= 10000) %>%
+  ggplot(aes(x = t, y = mean_prevalence, color = plasmid)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3)+
+  facet_wrap(~ experiment, labeller = as_labeller((experiment_labels))) +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_x_continuous(breaks = seq(min(df_LB$t), 10000, by = 5000),  # Major ticks
+                     #minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                      labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "t", y = "Prevalence", color = "Plasmid") +
+  paper_figs_theme +
+  theme(strip.text = element_text(size = 14))
+
+# pdf size: 6.70 x 4.53 (inches)
+```
+
+
+\newpage
+## Dynamics of subpopulation abundance
+
+The mean dynamics of subpopulation abundance was visualized by plotting the mean ± 1 standard error of the abundance of each sub population across replicates at each time point. Note that the number of replicates of a subpopulation at a given time point may vary across time, for it depends on how many replicates still have that subpopulation at that time point. Time was plotted to final t = 20000 where equilibrium of subpopulation abundance had been reached or nearly reached. Note that the K at y-axis represents carrying capacity, while the K at x-axis represents 1000 (hours).
+
+```{r dyn subpopulation abundance FF, message=FALSE, warning=FALSE, fig.cap="Figure B7: Mean dynamics of subpopulation abundance at full I x full P (FF)."}
+
+# create strain labels for plots
+strain_labels <- c("1" = "B1", "2" = "B2", "3" = "B3")
+
+dyn_subpopulation_FF <- df_LB %>%
+  filter(experiment == 1 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                      labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_FF
+```
+
+```{r dyn subpopulation abundance FM, message=FALSE, warning=FALSE, fig.cap="Figure B8: Mean dynamics of subpopulation abundance at  full I x modular P (FM)."}
+
+dyn_subpopulation_FM <- df_LB %>%
+  filter(experiment == 2 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_FM
+```
+
+```{r dyn subpopulation abundance FH, message=FALSE, warning=FALSE, fig.cap="Figure B9: Mean dynamics of subpopulation abundance at full I x hub P (FH)."}
+
+dyn_subpopulation_FH <- df_LB %>%
+  filter(experiment == 3 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_FH
+```
+
+```{r dyn subpopulation abundance NF, message=FALSE, warning=FALSE, fig.cap="Figure B10: Mean dynamics of subpopulation abundance at nested I x full P (NF)."}
+
+dyn_subpopulation_NF <- df_LB %>%
+  filter(experiment == 4 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_NF
+```
+
+```{r dyn subpopulation abundance NM, message=FALSE, warning=FALSE, fig.cap="Figure B11: Dynamics of subpopulation abundance at nested I x modular P (NM)."}
+
+dyn_subpopulation_NM <- df_LB %>%
+  filter(experiment == 5 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_NM
+```
+
+```{r dyn subpopulation abundance NH, message=FALSE, warning=FALSE, fig.cap="Figure B12: Mean dynamics of subpopulation abundance at nested I x hub P (NH)."}
+
+dyn_subpopulation_NH <- df_LB %>%
+  filter(experiment == 6 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_NH
+```
+
+```{r dyn subpopulation abundance MF, message=FALSE, warning=FALSE, fig.cap="Figure B13: Mean dynamics of subpopulation abundance at modular I x full P (MF)."}
+
+dyn_subpopulation_MF <- df_LB %>%
+  filter(experiment == 7 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_MF
+```
+
+```{r dyn subpopulation abundance MM, message=FALSE, warning=FALSE, fig.cap="Figure B14: Mean dynamics of subpopulation abundance at modular I x modular P (MM)."}
+
+dyn_subpopulation_MM <- df_LB %>%
+  filter(experiment == 8 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),   # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_MM
+```
+
+```{r dyn subpopulation abundance MH, message=FALSE, warning=FALSE, fig.cap="Figure B15: Mean dynamics of subpopulation abundance at modular I x hub P (MH)."}
+
+dyn_subpopulation_MH <- df_LB %>%
+  filter(experiment == 9 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_MH
+```
+
+```{r dyn subpopulation abundance single MF, message=FALSE, warning=FALSE, fig.width=8, fig.height=10, fig.cap="Figure B16: Dynamics of population abundance (a, c) and subpopualtion abundance (b, d) at modular I x full P (MF) from replicate 21 (a, b) and 23 (c, d). Replicate 21 demonstrated the stable coexistence scenario where the plasmid-free subpopulations of the peripheral hosts persisted. Replicate 23 demonstrated the unstable coexistence scenario where the plasmid-free subpopulations of the peripheral hosts went extinct. Note that the coexistence of peripheral hosts was not guaranteed; when the plasmid-free subpopulations went extinct, monoplasmidic subpopulations lost input from infection and quickly got co-infected, destabilizing the oscillatory dynamics of the coexisting populations."}
+
+MF_dynpop_rep21 <- df_LB %>%
+  filter(experiment == 7 & replicate == 21) %>%
+  filter(abundance > 0) %>%
+  #filter(t <= 2000) %>%
+  group_by(t, strain) %>%
+  summarize(sum_abundance = sum(abundance)/K) %>%
+  ggplot(aes(x = t, y = sum_abundance, color = factor(strain))) +
+    geom_line() +
+    scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000), # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+    # scale_x_continuous(minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 100)) +
+    labs(x="Time", y = "Abundance/K", color = "Host") +
+    scale_color_manual(values = strain_colors, 
+                       labels = c("B1", "B2", "B3")) +
+    #scale_color_manual(values = strain_colors) +
+    paper_figs_theme +
+    theme(strip.text = element_text(size = 14))
+
+MF_dynpop_rep23 <- df_LB %>%
+  filter(experiment == 7 & replicate == 23) %>%
+  filter(abundance > 0) %>%
+  group_by(t, strain) %>%
+  summarize(sum_abundance = sum(abundance)/K) %>%
+  ggplot(aes(x = t, y = sum_abundance, color = factor(strain))) +
+    geom_line() +
+    scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000), # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+    # scale_x_continuous(minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 100)) +
+    labs(x="Time", y = "Abundance/K", color = "Host") +
+    scale_color_manual(values = strain_colors, 
+                       labels = c("B1", "B2", "B3")) +
+    #scale_color_manual(values = strain_colors) +
+    paper_figs_theme +
+    theme(strip.text = element_text(size = 14))
+
+strain_labels <- c(`1` = "B1", `2` = "B2", `3` = "B3")
+
+MF_dynsubpop_rep21 <- df_LB %>%
+  filter(experiment == 7 & replicate == 21 & abundance > 0) %>%
+  # filter(t <= 2000) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(abund=abundance/K) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=abund, color=p_profile)) +
+  geom_line() +
+  #facet_wrap(~strain, labeller = labeller(strain = strain_labels)) +
+  facet_wrap(~strain, labeller = labeller(strain = strain_labels), ncol = 1) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000), # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K  
+  labs(x="Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+MF_dynsubpop_rep23 <- df_LB %>%
+  filter(experiment == 7 & replicate == 23 & abundance > 0) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(abund=abundance/K) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=abund, color=p_profile)) +
+  geom_line() +
+  #facet_wrap(~strain, labeller = labeller(strain = strain_labels)) +
+  facet_wrap(~strain, labeller = labeller(strain = strain_labels), ncol = 1) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 10000),  # Major ticks
+                     minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000), # Minor ticks
+                     labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+  labs(x="Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+plot_grid(MF_dynpop_rep21, MF_dynsubpop_rep21, 
+          align = "v", ncol = 1, nrow = 2, rel_heights = c(1, 2), 
+          labels = c('a', 'b'))
+plot_grid(MF_dynpop_rep23, MF_dynsubpop_rep23, rel_heights = c(1, 2), 
+          align = "v", ncol = 1, nrow = 2,
+          labels = c('a', 'b'))
+```
+
+### Dynamics of subpouplation abundance of B1 (used in Introduction)
+```{r dyn subpopulation abundance MF, message=FALSE, warning=FALSE, fig.cap="Figure B13: Mean dynamics of subpopulation abundance at modular I x full P (MF)."}
+
+dyn_subpopulation_MF_B1 <- df_LB %>%
+  filter(experiment == 7 & abundance > 0) %>%
+  filter(strain == 1) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  #facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000)) +
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation_MF_B1
+```
