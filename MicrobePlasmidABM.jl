@@ -11,9 +11,7 @@ include("parameters/params.jl")
 include("gillespie/system.jl")
 include("gillespie/gillespie.jl")
 include("gillespie/system1.jl")
-include("gillespie/system2.jl")
 include("gillespie/gillespie1.jl")
-include("gillespie/gillespie2.jl")
 
 #~ Model related modules
 #include("models/models.jl")
