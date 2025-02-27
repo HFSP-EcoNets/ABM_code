@@ -28,6 +28,10 @@ Below an overview of repositories, codes and files used for simulation & data pr
 ├── utils
 │   └── utils.jl
 ├── input
+│   │   ├── 3x4_test_IP_ctl_K_LB6-2_traits-fixed.csv
+│   │   ├── exp_design_util.R
+│   │   └── exp_design.R
+│   └── json
 ├── output
 └── MicrobePlasmidABM.jl
 ```
@@ -151,7 +155,7 @@ output_folder::String = "data"
 for i in 1:job_length
     job_key::String = string.(job_keys[i])
     JOB_ID::String = lpad(string(i), 6, "0")
-    filename = "input/ctl_I_tr1_P_tr1_seed$(job_seeds[i])_YJ.json"
+    filename = "input/json/ctl_I_tr1_P_tr1_seed$(job_seeds[i])_YJ.json"
     params = Params.load_parameters(filename);
     MicrobePlasmidABM.Gillespie.run(params; filename = filename, output_folder, job_key, JOB_ID)
 end 
@@ -159,14 +163,37 @@ end
 
 After which, you shall see an automatically generated files `output$job_key.sqlite` in the repository `data`.
 
+### Infection tensor generatoin
+Each parameter input file (.json file) will contain a path to a infection tensor file (.json file) used for the simulation. This 3-dimentional tensor contains propensities at which a transconjugant of a certain subpopulation can be produed during an infection event, given the H, I, P networks, and the identities of plasmid donor and recipient. When not specifically asigned (i.e. "tensor_file": null), this tensor will be generated during the simulation. For computational efficiency, it is recommanded to generate the infeciton tensor file in advance using the parameter input file. For example, delete the tensor file `tensor_exmaple3.sqlite` in the repository `parameters/json`, then follow the instructions below:
+
+```sh
+# Set the folder path to the parameter input file
+folder_path = "parameters/json/"
+
+# Specificy the JSON file of parameters
+filename = joinpath(folder_path, "parameters_example3.json")
+
+# Get the parameters
+params = Params.load_parameters(filename);
+
+# Specificy the path and name of the JSON file of infection tensor
+propensity_filename = params.tensor_file
+
+# Generate the tensor file         
+MicrobePlasmidABM.JSONgenerator.generate_propensities_json(params, propensity_filename); 
+```
+
+After which, you shall see an automatically generated files `tensor_exmaple3.sqlite` in the repository `parameters/json`.
+
 
 ### Input preparation and output analysis for mutiple simulations
-Input (.json files) generation and output (.sqlite files) analysis is performed in R. For the R script of input generation, please check `exp_design.R` in the repository `input`. For the R script of output analysis, please check `Appendix_B.Rmd` in the repository `analysis`.
-(To do: upload input of emperically based simulations and Appendix_C.Rmd if needed.)
+Input (.json files) generation and output (.sqlite files) analysis is performed in R. For the R script of input generation, please check `exp_design.R` in the repository `input`. For the R script of output analysis, please check `list_output.R` and `Appendix_B.Rmd` in the repository `analysis`.
+
+(To do: upload input & output of emperically based simulations and Appendix_C.Rmd if needed.)
 
 ### Input and output used in the manuscript
-The input (.json files) and output (.sqlite files) used in the manuscript are respectively stored in the repository `input` and repository `output`.
+The raw input (.json files) and output (.sqlite files) used in the manuscript are respectively stored in the repository `input/json` and repository `output`. In addition, an overview of the input is also provided in .csv files, respectively stored in the repository `input`. 
 
 ## :page_facing_up: Notes 
-1. Setting a high community-wise carrying capacity (e.g. 1e10) may greatly slows down the simulation as delta_t becomes extremely small in each loop... (hence simulations can take hours, days, and even more...). Therefore it is recommended to scale K below 1e6 for computational tractability.
+1. Setting a high community-wise carrying capacity (e.g. 1e10) may greatly slows down the simulation as delta_t becomes extremely small in each loop. Therefore it is recommended to scale K below 1e6 for computational tractability.
 

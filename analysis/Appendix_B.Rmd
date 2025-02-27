@@ -19,14 +19,14 @@ For the experimental design and data analysis, see Materials and Methods and Fig
 knitr::opts_chunk$set(echo = FALSE)
 
 # set working directory
-setwd("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R")
+setwd("/Users/YingJie/Documents/GitHub/ABM_code/analysis")
 
 # packages & customized functions for data processing
-source("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R/process_util.R") 
-source("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R/figure_themes.R")
+source("/Users/YingJie/Documents/GitHub/ABM_code/analysis/process_util.R") 
+source("/Users/YingJie/Documents/GitHub/ABM_code/analysis/figure_themes.R")
 
 # read in the experimental design
-file_path <- "/Users/YingJie/Documents/GitHub/population_dynamics_ABM/hpc/sims/input/3x4_test_IP_ctl_K_LB6-2_traits-fixed.csv"
+file_path <- "/Users/YingJie/Documents/GitHub/ABM_code/input/3x4_test_IP_ctl_K_LB6-2_traits-fixed.csv"
 design <- read.csv(file_path, header = TRUE)
 
 first_key = min(design$key) # the first key of your experiment
@@ -40,8 +40,8 @@ experiment_labels <- c("1" = "FF", "2" = "FM", "3" = "FH",
                        "4" = "NF", "5" = "NM", "6" = "NH", 
                        "7" = "MF", "8" = "MM", "9" = "MH")
 
-# read in the results (pre-processed into .csv files)
-df_LB <- read.csv("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/hpc/sims/output/df_LB_ctl_t20000.csv")
+# read in the results (pre-combined .sqlite files into a single .csv file)
+df_LB <- read.csv("/Users/YingJie/Documents/GitHub/ABM_code/analysis/df_LB_ctl_t20000.csv")
 
 # Create lists of subpopulations of interests
 pp_list1 = c("0 0 0 0", "1 0 0 0", "0 1 0 0", "0 0 1 0", "0 0 0 1") # plasmid-free & monoplasmidic subpopulations
