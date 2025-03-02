@@ -91,7 +91,7 @@ function generate_propensities_json(params, filename::AbstractString, power::Flo
     return Γ # optional
 end
 
-# previous function (the difference is after #/ Convert SparseArray to a format suitable for JSON)
+# Generate same tensor as the previous function (the difference is after #/ Convert SparseArray to a format suitable for JSON)
 function generate_propensities_json2(params, filename::AbstractString; power::Float64 = 2.0)
     #/ To compute the propensity tensor P, we need a list of all different strain ID & plasmid
     #  profiles that can exist in the system, even those that are not initially present.
