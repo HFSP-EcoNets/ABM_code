@@ -184,6 +184,7 @@ MicrobePlasmidABM.JSONgenerator.generate_propensities_json(params, propensity_fi
 ```
 
 After which, you shall see an automatically generated files `tensor_exmaple3.sqlite` in the repository `parameters/json`.
+To generate a series of tensor files (.json files) from an overview of the input in a .csv file (i.e. the experimental design table), follow the instructions in `tensor_josn_generator.jl` in the repository `parameters/json`. 
 
 
 ### Input preparation and output analysis for mutiple simulations
