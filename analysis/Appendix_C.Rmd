@@ -19,7 +19,7 @@ The empirical experimental system consists of 3 host populations (B1, B2, and B3
 knitr::opts_chunk$set(echo = FALSE)
 
 # set working directory
-setwd("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R")
+setwd("/Users/YingJie/Documents/GitHub/ABM_code/analysis")
 
 # packages & customized functions for data processing
 source("/Users/YingJie/Documents/GitHub/ABM_code/analysis/R/process_util.R") 
