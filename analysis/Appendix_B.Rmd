@@ -127,9 +127,9 @@ coexistence_t %>%
 ```
 
 \newpage
-## Population dominance at the end of the simulations
+## Relative abudance of population at the end of the simulations
 
-```{r end population dominance LB, message=FALSE, warning=FALSE, fig.width=12, fig.height=10, fig.cap="Figure B2: Pouplation dominance at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
+```{r end population dominance LB, message=FALSE, warning=FALSE, fig.width=12, fig.height=10, fig.cap="Figure B2: Relative abundance of populations at the end of the simulations at the following network structures: full I x full P (FF), full I x modular P (FM), full I x hub P (FH), nested I x full P (NF), nested I x modular P (NM), nested I x hub P (NH), modular I x full P (MF), modular I x modular P (MM), and modular I x hub P (MH)."}
 experiment_colors <- c("FF" = "pink", "FM" = "palevioletred1", "FH" = "red4", 
                        "NF" = "lightskyblue", "NM" = "royalblue", "NH" = "slateblue4", 
                        "MF" = "seagreen1", "MM" = "seagreen3", "MH" = "seagreen4")
@@ -918,7 +918,7 @@ plot_grid(MF_dynpop_rep23, MF_dynsubpop_rep23, rel_heights = c(1, 2),
 
 dyn_subpopulation_MF_B1 <- df_LB %>%
   filter(experiment == 7 & abundance > 0) %>%
-  filter(strain == 1) %>%
+  filter(strain == 1 & t <= 3000) %>%
   # Average abundance across replicates
   group_by(t, strain, p_profile) %>%
   summarise(n=n(),
@@ -933,7 +933,7 @@ dyn_subpopulation_MF_B1 <- df_LB %>%
   geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
   #facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
   scale_colour_manual(values = profile_colors, drop = TRUE) +
-  scale_x_continuous(breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000)) +
+  scale_x_continuous(breaks = seq(min(df_LB$t), 3000, by = 1000)) +
   labs(x = "Time", y = "Abundance/K", color = "Profile") +
   paper_figs_theme +
   theme(panel.grid.major = element_blank(), # Removes major grid lines
