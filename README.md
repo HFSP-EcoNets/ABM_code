@@ -190,8 +190,6 @@ To generate a series of tensor files (.json files) from an overview of the input
 ### Input preparation and output analysis for mutiple simulations
 Input (.json files) generation and output (.sqlite files) analysis is performed in R. For the R script of input generation, please check `exp_design.R` in the repository `input`. For the R script of output analysis, please check `list_output.R` and `Appendix_B.Rmd` in the repository `analysis`.
 
-(To do: upload input & output of emperically based simulations and Appendix_C.Rmd if needed.)
-
 ### Input and output used in the manuscript
 The raw input (.json files) and output (.sqlite files) used in the manuscript are respectively stored in the repository `input/json` and repository `output`. In addition, an overview of the input is also provided in .csv files, respectively stored in the repository `input`. 
 

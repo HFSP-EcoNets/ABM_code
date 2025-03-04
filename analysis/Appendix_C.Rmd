@@ -1,0 +1,327 @@
+---
+title: "Appendix C: Modeling results based on an emperical system"
+geometry: margin=2cm # or "left=3cm,right=3cm,top=2cm,bottom=2cm"
+output: 
+  pdf_document:
+  latex_engine: xelatex
+fontsize: 10pt
+header-includes:
+  - \usepackage{caption}
+  - \captionsetup[figure]{labelformat=empty}
+---
+\vspace{-1cm}
+The empirical experimental system consists of 3 host populations (B1, B2, and B3) and 2 plasmids (P1 and P2)... (to be continued)
+
+```{r setup, include=FALSE}
+# note: to skip a section of content, select the section and press shift + command + C
+
+# mute the code (not to print them out)
+knitr::opts_chunk$set(echo = FALSE)
+
+# set working directory
+setwd("/Users/YingJie/Documents/GitHub/population_dynamics_ABM/src/analysis/R")
+
+# packages & customized functions for data processing
+source("/Users/YingJie/Documents/GitHub/ABM_code/analysis/R/process_util.R") 
+source("/Users/YingJie/Documents/GitHub/ABM_code/analysis/R/figure_themes.R")
+
+# read in the experimental design
+file_path <- "/Users/YingJie/Documents/GitHub/ABM_code/input/3x2_test_IP_ctl_K_LB_test13.csv" # for results in Fig. 5d-e
+# file_path <- "/Users/YingJie/Documents/GitHub/ABM_code/input/3x2_test_IP_ctl_K_LB_test14.csv" # for results in Fig. 5g-h
+
+design <- read.csv(file_path, header = TRUE)
+
+first_key = min(design$key) # the first key of your experiment
+last_key = max(design$key) # the last key of your experiment
+n_b <- design$n_b[1]
+n_p <- design$n_p[1]
+n_rep = length(unique(design$rep))
+K = 100000 # community carrying capacity
+
+
+# read in the results (pre-processed into .csv files)
+# note: test 12 is without compensatory evolution of bridge host, test 13 is with compensatory evolution of bridge host
+df_LB_KT <- read.csv("/Users/YingJie/Documents/GitHub/ABM_code/analysis/df_LB_KT_ctl_test13.csv")
+# df_LB_KT <- read.csv("/Users/YingJie/Documents/GitHub/ABM_code/analysis/df_LB_KT_ctl_test14.csv")
+
+
+# create fixed p_profile colors
+profile_colors <- c("0 0" = "palegoldenrod",
+                    "1 0" = "orange", "0 1" = "palegreen", 
+                    "1 1" = "royalblue")
+
+# create fixed p_profile colors (based on Kaitlin's plots)
+profile_colors_KT <- c("0 0" = "black",
+                    "1 0" = "orange", "0 1" = "lightgreen", 
+                    "1 1" = "royalblue3")
+
+# create fixed p_profile colors (based on new color set: bright pink, cyan/teal, yellow-green)
+profile_colors_KT2 <- c("0 0" = "black",
+                    "1 0" = "#e377c2", "0 1" = "#17becf", 
+                    "1 1" = "#fed825")
+
+# create desired order of p_profiles
+desired_order <- c("0 0", "1 0", "0 1", "1 1")
+
+# create fixed strain colors
+# strain_colors <- c("1" = "greenyellow", "2" = "steelblue4", "3" = "purple4")
+strain_colors <- c("1" = "#1f77b4", "2" = "#ff7f0e", "3" = "#2ca02c")
+
+# ensure p_profile in df_LB is a factor with the desired order
+df_LB_KT$p_profile <- factor(df_LB_KT$p_profile, levels = desired_order)
+
+# set additional plot theme which resembles the one Kaitlin used (see rmd_beyonce.Rmd)
+customPlotTheme <- theme_bw(base_size = 16, base_family = "") +
+  theme(legend.title = element_text(size = rel(0.8)),
+        legend.text = element_text(size = rel(0.8)))
+```
+
+## Dynamics of subpopulation abundance
+
+The mean dynamics of subpopulation abundance was visualized by plotting the mean ± 1 standard error of the abundance of each sub population across replicates at each time point. Note that the number of replicates of a subpopulation at a given time point may vary across time, for it depends on how many replicates still have that subpopulation at that time point. Time was plotted to final t = 2000 where equilibrium of subpopulation abundance had been reached.
+
+```{r dyn subpopulation abundance, message=FALSE, warning=FALSE, fig.cap="Figure C1: Mean dynamics of subpopulation abundance at mod I x full P."}
+
+# create strain labels for plots
+strain_labels <- c("1" = "B1", "2" = "B2", "3" = "B3")
+
+# subpopulation plots v1 (relative abundance to K; population facet)
+dyn_subpopulation <- df_LB_KT %>%
+  filter(abundance > 0) %>%
+  # filter(t <= 250) %>%
+  # Average abundance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n=n(),
+            mean_abund=mean(abundance/K),
+            sd_abund=sd(abundance/K),
+            se_abund=sd(abundance/K)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ungroup() %>%
+  ggplot(aes(x=t, y=mean_abund, color=p_profile)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  facet_wrap(~strain, labeller = as_labeller(strain_labels)) +
+  scale_colour_manual(values = profile_colors, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(df_LB_KT$t), max(df_LB_KT$t), by = 1000),  # Major ticks
+                     minor_breaks = seq(min(df_LB_KT$t), max(df_LB_KT$t), by = 500)) +  # Minor ticks
+  labs(x = "Time", y = "Abundance/K", color = "Profile") +
+  paper_figs_theme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+dyn_subpopulation
+```
+
+## Dominance of subpopulations (used in the manuscript)
+
+```{r dyn subpopulation dominance, message=FALSE, warning=FALSE, fig.cap="Figure C2: Mean dynamics of subpopulation prevalence at modular I x full P."}
+
+# create strain labels for plots
+strain_labels <- c("1" = "B1", "2" = "B2", "3" = "B3")
+
+# subpopulation plots (Dominance to community size)
+dyn_subpopulation <- df_LB_KT %>%
+  filter(abundance > 0) %>%
+  filter(t <= 240) %>%
+  # Calculate total abundance across all strain*p_profile groups for each t and replicate
+  group_by(t, replicate) %>%
+  mutate(total_abundance = sum(abundance)) %>%
+  ungroup() %>%
+  # Calculate dominance as subpopulation abundance / total abundance
+  mutate(dominance = abundance / total_abundance) %>%
+  # Average dominance across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n = n(),
+            mean_dominance = mean(dominance),
+            sd_dominance = sd(dominance),
+            se_dominance = sd(dominance) / sqrt(n),
+            lower_se = ifelse(mean_dominance - se_dominance < 0, 0, mean_dominance - se_dominance), # set the lower boundary (0) for the SE bar
+            upper_se = mean_dominance + se_dominance) %>%
+  mutate(t_day = t/24, strain = factor(strain, levels = c("1", "2", "3"), labels = c("B1", "B2", "B3")))
+  
+plot_dyn_subpopulation <- dyn_subpopulation %>%
+  filter(p_profile != "0 0") %>%
+  ggplot(aes(x=t_day, y=mean_dominance, color=p_profile, shape = strain)) +
+  geom_point(size = 3) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  scale_shape_manual(values = c("B1" = 15, "B2" = 17, "B3" = 16)) + # Square = 22, Triangle = 24, Circle = 21
+  scale_colour_manual(values = profile_colors_KT2, drop = TRUE) +
+  scale_fill_manual(values = profile_colors_KT2, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(dyn_subpopulation$t_day), max(dyn_subpopulation$t_day), by = 2)) +  # Major ticks
+  scale_y_continuous(limits = c(0.0, 0.8)) +  # Major ticks
+  labs(x = "Day", y = "Relative abundance", color = "Profile", title = "test15") +
+  #paper_figs_theme +
+  customPlotTheme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+plot_dyn_subpopulation
+# save in 4.76 x 3.43 inches
+```
+
+## Proportion of subpopulations in each population 
+
+```{r dyn subpopulation dominance, message=FALSE, warning=FALSE, fig.cap="Figure C2: Mean dynamics of subpopulation prevalence at modular I x full P."}
+
+dyn_subpopulation <- df_LB_KT %>%
+  filter(abundance > 0) %>%
+  filter(t <= 240) %>%
+  # Calculate abundance of all p_profile groups for each t, replicate, and strain
+  group_by(t, replicate, strain) %>%
+  mutate(pop_abundance = sum(abundance)) %>%
+  ungroup() %>%
+  # Calculate proportion as subpopulation abundance / population abundance
+  mutate(subpop_prop = abundance / pop_abundance) %>%
+  # Average subpopulation proportion across replicates
+  group_by(t, strain, p_profile) %>%
+  summarise(n = n(),
+            mean_prop = mean(subpop_prop),
+            sd_prop = sd(subpop_prop),
+            se_prop = sd(subpop_prop) / sqrt(n),
+            lower_se = ifelse(mean_prop - se_prop < 0, 0, mean_prop - se_prop), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prop + se_prop) %>%
+  mutate(t_day = t/24, strain = factor(strain, levels = c("1", "2", "3"), labels = c("B1", "B2", "B3")))
+  
+plot_dyn_subpopulation <- dyn_subpopulation %>%
+  filter(p_profile != "0 0") %>%
+  ggplot(aes(x=t_day, y=mean_prop, color=p_profile, shape = strain)) +
+  geom_point(size = 3) +
+  geom_line() +
+  #geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+  scale_shape_manual(values = c("B1" = 15, "B2" = 17, "B3" = 16)) + # Square = 22, Triangle = 24, Circle = 21
+  scale_colour_manual(values = profile_colors_KT2, drop = TRUE) +
+  scale_fill_manual(values = profile_colors_KT2, drop = TRUE) +
+  scale_x_continuous(breaks = seq(min(dyn_subpopulation$t_day), max(dyn_subpopulation$t_day), by = 2)) +  # Major ticks
+  scale_y_continuous(limits = c(0.0, 0.8)) +  # Major ticks
+  labs(x = "Day", y = "Proportion", color = "Profile", title = "test13") +
+  #paper_figs_theme +
+  customPlotTheme +
+  theme(panel.grid.major = element_blank(), # Removes major grid lines
+        panel.grid.minor = element_blank(), # Removes minor grid lines
+        strip.text = element_text(size = 14)) # set font size
+
+plot_dyn_subpopulation
+# save in 4.76 x 3.43 inches
+```
+
+## Dynamics of population abundance
+The dynamics of population abundance was visualized by plotting the mean ± 1 standard error of the abundance of each population across replicates at each time point. Note that the number of replicates of a population at a given time point may vary across time, for it depends on how many replicates still have that population at that time point. Time was plotted to t = 2000 where equilibrium of population abundance had been reached. 
+
+```{r dyn population abundance LB, message=FALSE, warning=FALSE, fig.cap="Figure C3: Mean dynamics of population abundance at modular I x full P."}
+
+# plot absolute abundance 
+dyn_population <- df_LB_KT %>%
+  filter(abundance > 0) %>% 
+  # plot to a given scale of interest (e.g. 10000)
+  filter(t <= 250) %>%
+  # Sum up subpopulation abundance of each strain at each t for each replicate
+  group_by(experiment, t, strain, replicate) %>% 
+  summarise(sum_abund=sum(abundance)/K) %>%
+  ungroup() %>%
+  # Rename strains
+  # mutate(strain = recode(strain, "1" = "B1", "2" = "B2", "3" = "B3")) %>%
+  # Now average across replicates
+  group_by(experiment, t, strain) %>%
+  summarise(n = n(), mean_abund=mean(sum_abund), 
+            sd_abund=sd(sum_abund),
+            se_abund=sd(sum_abund)/sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund<0,0,mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  ggplot(aes(x = t, y = mean_abund, color = factor(strain))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+    labs(x="Time", y = "Abundance/K", color = "Host") +
+    scale_color_manual(values = strain_colors, labels = c("B1", "B2", "B3")) +
+    scale_x_continuous(breaks = seq(min(df_LB$t), 2000, by = 1000)) +  # Major ticks
+                     #minor_breaks = seq(min(df_LB$t), max(df_LB$t), by = 5000),  # Minor ticks
+                     #labels = label_number(scale = 1e-3, suffix = "K")) +  # Format as K
+    paper_figs_theme +
+    theme(strip.text = element_text(size = 14))
+
+dyn_population
+
+# plot absolute log abundance (log with base 10)
+dyn_population_log10 <- df_LB_KT %>%
+  filter(abundance > 0) %>%
+  filter(t <= 240) %>%
+  # Sum up subpopulation abundance of each strain at each t for each replicate
+  group_by(experiment, t, strain, replicate) %>% 
+  
+  # Take log10 of abundance
+  summarise(log_sum_abund = log10(sum(abundance))) %>%
+  ungroup() %>%
+  
+  # Now average across replicates
+  group_by(experiment, t, strain) %>%
+  summarise(n = n(),
+            mean_abund = mean(log_sum_abund), 
+            sd_abund = sd(log_sum_abund),
+            se_abund = sd(log_sum_abund) / sqrt(n),
+            lower_se = ifelse(mean_abund - se_abund < 0, 0, mean_abund - se_abund), # set the lower boundary (0) for the SE bar
+            upper_se = mean_abund + se_abund) %>%
+  mutate(t_day = t/24)
+
+plot_dyn_population_log10 <- dyn_population_log10 %>%
+  ggplot(aes(x = t_day, y = mean_abund, color = factor(strain))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype = 2, alpha = 0.3) +
+    labs(x = "Time", y = "Log10(Abundance)", color = "Host") +
+    scale_color_manual(values = strain_colors, labels = c("B1", "B2", "B3")) +
+    scale_x_continuous(breaks = seq(min(dyn_population_log10$t_day), max(dyn_population_log10$t_day), by = 2)) +  # Major ticks
+    paper_figs_theme +
+    theme(strip.text = element_text(size = 14))
+
+plot_dyn_population_log10
+# size 4.90 x 3.18
+
+#plot_grid(plot_dyn_population_log10, plot_dyn_subpopulation, 
+#          align = "h", nrow = 1,
+#          labels = c('a', 'b'))
+
+
+
+# plot population proportion (abundance/community size; used in the manuscript)
+df_LB_KT_240 <- df_LB_KT %>%
+  filter(abundance > 0) %>% 
+  # plot to a given scale of interest (e.g. 10000)
+  filter(t <= 240) %>%
+  # Sum up community abundance at each t for each replicate
+  group_by(experiment, t, replicate) %>%
+  mutate(community_size = sum(abundance), 
+         t_day = t/24)
+
+dyn_population_prop <- df_LB_KT_240 %>%
+  # Sum up subpopulation abundance of each strain at each t for each replicate and calculate population dominance
+  group_by(experiment, t, strain, replicate) %>% 
+  mutate(pop_prop = sum(abundance)/community_size)%>%
+  ungroup() %>%
+  # Rename strains
+  # mutate(strain = recode(strain, "1" = "B1", "2" = "B2", "3" = "B3")) %>%
+  # Now average across replicates
+  group_by(experiment, t_day, strain) %>%
+  summarise(n = n(), mean_prop=mean(pop_prop), 
+            sd_prop=sd(pop_prop),
+            se_prop=sd(pop_prop)/sqrt(n),
+            lower_se = ifelse(mean_prop - se_prop<0,0,mean_prop - se_prop), # set the lower boundary (0) for the SE bar
+            upper_se = mean_prop + se_prop) %>%
+  ggplot(aes(x = t_day, y = mean_prop, color = factor(strain))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower_se, ymax = upper_se), linetype=2, alpha = 0.3) +
+    labs(x="Day", y = "Relative abundance", color = "Host", title = "test15") +
+    scale_color_manual(values = strain_colors, labels = c("B1", "B2", "B3")) +
+    # paper_figs_theme +
+    customPlotTheme +
+    scale_x_continuous(breaks = seq(min(df_LB_KT_240$t_day), max(df_LB_KT_240$t_day), by = 2)) +  # Major ticks
+    scale_y_continuous(limits = c(0, 1.0)) +  # Major ticks
+    theme(strip.text = element_text(size = 14),
+          panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank())
+
+dyn_population_prop
+# save in 4.76 x 3.43 inches
+```
+
