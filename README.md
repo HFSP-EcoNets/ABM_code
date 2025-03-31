@@ -13,6 +13,8 @@ Below an overview of repositories, codes and files used for simulation & data pr
 │   ├── figure_themes.R
 │   ├── process_util.R
 │   └── gatheroutput.jl
+├── empirical_data_analysis
+│   └── beyonce_subset.Rmd
 ├── gillespie
 │    ├── gillespie.jl
 │    ├── gillespie1.jl

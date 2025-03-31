@@ -1,0 +1,240 @@
+---
+title: "doc_beyonce_sub"
+author: "Kaitlin A. Schaal & Ying-Jie Wang"
+date: "`r Sys.Date()`"
+output: html_document
+knit: (function(inputFile, encoding) { 
+          rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file='doc_shortplasmidexp')})
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This script analyzes the data set data_beyonce.csv. These data are from an experiment 
+
+```{r echo = FALSE, message = FALSE}
+# settings and functions
+library(dplyr)
+library(tidyr)
+library(viridis)
+library(ggplot2)
+library(gridExtra)
+
+# set working directory
+setwd("/Users/YingJie/My Drive/HFSP_Israel/lab/HFSP_project/YJs_project/Kaitlin's data/")
+
+# ggplot2 settings to make the plots pretty
+customPlotTheme <- theme_bw(base_size = 16, base_family = "") +
+  theme(legend.title = element_text(size = rel(0.8)),
+        legend.text = element_text(size = rel(0.8)),
+        # background grid
+        strip.background = element_rect(colour="grey",
+                                        fill=FALSE,
+                                        linewidth=0.1,
+                                        linetype="solid"))
+
+# summarySE() function
+## obtained from http://www.cookbook-r.com/Graphs/Plotting_means_and_error_bars_(ggplot2)/#Helper functions
+## to calculate means and 95% confidence intervals:
+## Gives count, mean, standard deviation, standard error of the mean, and confidence interval (default 95%).
+##   data: a data frame.
+##   measurevar: the name of a column that contains the variable to be summarized
+##   groupvars: a vector containing names of columns that contain grouping variables
+##   na.rm: a boolean that indicates whether to ignore NA's
+##   conf.interval: the percent range of the confidence interval (default is 95%)
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  #library(plyr)
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- plyr::ddply(data, groupvars, .drop=.drop,
+                       .fun = function(xx, col) {
+                         c(N    = length2(xx[[col]], na.rm=na.rm),
+                           mean = mean   (xx[[col]], na.rm=na.rm),
+                           sd   = sd     (xx[[col]], na.rm=na.rm)
+                         )
+                       },
+                       measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- plyr::rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+```
+
+### 1: calculations
+
+```{r}
+data <- read.csv("data_beyonce.csv")
+str(data)
+
+#data$time <- as.factor(data$time)
+data$community <- as.factor(data$community)
+data$bridge <- as.factor(data$bridge)
+data$plasmids <- as.factor(data$plasmids)
+data$stress <- as.factor(data$stress)
+data$Kn <- as.factor(data$Kn)
+data$Hg <- as.factor(data$Hg)
+data$plate <- as.factor(data$plate)
+data$strain <- as.factor(data$strain)
+
+data$stress <- factor(data$stress, levels = c("none", "Hg", "Kn", "Hg + Kn"))
+data$strain <- factor(data$strain, levels = c("MG1655", "KT2440", "SBW25"))
+
+# rename for plasmid names
+data$fluor <- recode(data$fluor, total = "total", green = "pKJK5", red = "pQBR57", yellow = "both")
+data$fluor <- as.factor(data$fluor)
+
+# remove counts of GFP SBW25, which have not been validated as truly SBW25
+data <- filter(data, !(strain == "SBW25" & fluor == "pKJK5"))
+
+# calculate CFUs/ml
+data <- mutate(data, pop = 17)
+for (i in 1:nrow(data)) {
+  data$pop[i] <- data$cfus[i] * 150/40 * 10 ^ (data$dilution[i]) * 200/15 # 40 ul plated from 150 ul sample
+}
+
+data <- mutate(data, log = log10(pop + 1))
+
+str(data)
+```
+
+### 2: visualize the data by community (abundance relative to community size); focusing on SMK/p system without stress
+
+
+```{r}
+# redifine strain colors
+strain_colors <- c("SBW25" = "#1f77b4", "KT2440" = "#ff7f0e", "MG1655" = "#2ca02c")
+
+# extract data subset 
+data_SKMp <- subset(data, community == "SMK/p" & fluor == "total" & stress == "none")
+
+# ensure strain in df_LB is a factor with the desired order
+data_SKMp$strain <- factor(data_SKMp$strain, levels = c("SBW25", "KT2440", "MG1655"))
+
+# calculate the community size and population dominance (as the proportion of population abundances/community size)
+data_SKMp <- data_SKMp %>%
+  group_by(time, replicate) %>%
+  mutate(community_size = sum(pop), 
+         pop_prop = pop/community_size)
+
+# check the group mean of log10(abundance), to make sure we are using the right data subset
+SKMp_pop_summary <- data_SKMp %>%
+  group_by(time, strain) %>%
+  summarize(mean_abund = mean(pop),
+            mean_log = mean(log),
+            mean_prop = mean(pop_prop))
+
+# plot the population dynamics relative to community size
+pSMKp_prop <- ggplot(data_SKMp, aes(x = time, y = pop_prop, color = strain)) +
+  geom_point(size = 2, alpha = 0.7, show.legend = T, position = position_dodge(width = 0.5)) +
+  stat_summary(fun = mean, geom = "point", size = 4, shape = 16, position = position_dodge(width = 0.5)) + # Mean points
+  stat_summary(fun = mean, geom = "line", aes(group = strain), linewidth = 0.6, position = position_dodge(width = 0.5)) + # Mean lines
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.2, position = position_dodge(width = 0.5)) + # Error bars (SE)
+  coord_cartesian(ylim = c(0, NA)) +
+  labs(y = expression("Relative abundance"), x = "Day", color = "Host") +
+  customPlotTheme +
+  #scale_color_viridis_d(option = "viridis", direction = 1, end = 0.85) +
+  scale_color_manual(values = strain_colors, labels = c("B1", "B2", "B3")) +
+  scale_x_continuous(breaks = c(0, 2, 6, 10))
+pSMKp_prop
+
+# saved as 4.76 x 3.43 inches
+```
+
+### 3: visualize the plasmid frequency dynamics
+
+```{r}
+# calculate plasmid-free populations of each strain
+
+# SBW25
+dataS <- select(data[which(data$plasmids == "yes" & data$strain == "SBW25"),], 
+                c("time", "community", "stress", "replicate", "strain", "fluor", "pop"))
+dataS <- pivot_wider(dataS, names_from = c("fluor"), values_from = "pop", values_fn = sum, values_fill = NA)
+dataS <- mutate(dataS, 
+                plasmid = rowSums(dataS[,6], na.rm = T),
+                free = total - plasmid)
+dataS <- pivot_longer(select(dataS,-c("plasmid")), c(7:8), names_to = "fluor", values_to = "pop", values_drop_na = T)
+dataS <- mutate(dataS, freq = ifelse(pop == 0, 0, pop / total))
+
+# MG1655
+dataM <- select(data[which(data$plasmids == "yes" & data$strain == "MG1655"),], 
+                c("time", "community", "stress", "replicate", "strain", "fluor", "pop"))
+dataM <- pivot_wider(dataM, names_from = "fluor", values_from = "pop", values_fn = sum, values_fill = NA)
+dataM <- mutate(dataM, 
+                plasmid = rowSums(dataM[,7], na.rm = T),
+                free = total - plasmid)
+dataM <- pivot_longer(select(dataM,-c("plasmid")), c(7:8), names_to = "fluor", values_to = "pop", values_drop_na = T)
+dataM <- mutate(dataM, freq = ifelse(pop == 0, 0, pop / total))
+
+# KT2440
+dataK <- select(data[which(data$plasmids == "yes" & data$strain == "KT2440"),], 
+                c("time", "community", "stress", "replicate", "strain", "fluor", "pop"))
+dataK <- pivot_wider(dataK, names_from = "fluor", values_from = "pop", values_fn = sum, values_fill = NA)
+dataK <- mutate(dataK, 
+                plasmid = rowSums(dataK[,7:9], na.rm = T),
+                free = total - plasmid)
+dataK <- pivot_longer(select(dataK,-c("plasmid")), c(7:10), names_to = "fluor", values_to = "pop", values_drop_na = T)
+dataK <- mutate(dataK, freq = ifelse(pop == 0, 0, pop / total))
+
+# combine them back into the same data table
+dataP <- bind_rows(dataS, dataM, dataK)
+dataP$fluor <- factor(dataP$fluor, levels = c("pQBR57", "pKJK5", "both", "free"))
+```
+
+#### 3.2 (for YJ's manucript; used): rename y-axis and change the colors; plot subpopulation dominance (abundance/community size) instead
+
+
+```{r}
+# extract data subset
+dataP_sub <- subset(dataP, stress == "none" & community == "SMK/p")
+
+# ensure strain in df_LB is a factor with the desired order
+dataP_sub$strain <- factor(dataP_sub$strain, levels = c("SBW25", "KT2440", "MG1655"))
+
+# calculate subpopulation dominance (abundance/community size) of each time x strain x replicate
+subpop_dominance <- dataP_sub %>%
+  group_by(time, replicate) %>% 
+  mutate(community_abundance = sum(pop)) %>%
+  group_by(time, replicate, strain, fluor) %>%
+  summarise(
+    dominance = sum(pop) / first(community_abundance),
+    .groups = 'drop'
+  )
+
+pPlas3 <- subpop_dominance %>%
+  filter(fluor != "free") %>%
+  ggplot(aes(x = time, y = dominance, color = fluor, shape = strain)) +
+  geom_point(size = 2, alpha = 0.5, show.legend = T, position = position_dodge(width = 0.5)) +
+  stat_summary(fun.data = "mean_cl_normal", geom = "line", linewidth = 0.6, position = position_dodge(width = 0.5)) +
+  stat_summary(fun.data = "mean_cl_normal", size = 0.7, position = position_dodge(width = 0.5)) +
+  labs(y = "Relative abundance", x = "Day", color = "Profile", shape = "Host") +
+  coord_cartesian(ylim = c(0, 0.8)) +
+  customPlotTheme +
+  scale_color_manual(values = c("#e377c2", "#17becf", "#FDE825"), labels = c("1 0", "0 1", "1 1")) +
+  scale_shape_manual(values = c("SBW25" = 15, "KT2440" = 17, "MG1655" = 16), labels = c("B1", "B2", "B3")) +
+  scale_x_continuous(breaks = c(0, 2, 6, 10))
+pPlas3
+
+# saved as 4.76 x 3.43 inches
+```
